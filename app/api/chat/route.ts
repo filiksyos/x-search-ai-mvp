@@ -1,24 +1,21 @@
-import { createXai } from '@ai-sdk/xai';
-import { streamText, tool } from 'ai';
+import { xai } from '@ai-sdk/xai';
+import { convertToModelMessages, streamText, tool, UIMessage } from 'ai';
 import { z } from 'zod';
-
-// Initialize xAI provider
-const xai = createXai({
-  apiKey: process.env.XAI_API_KEY || '',
-});
 
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages }: { messages: UIMessage[] } = await req.json();
 
-  const result = await streamText({
-    model: xai('grok-beta'),
-    messages,
+  const prompt = convertToModelMessages(messages);
+
+  const result = streamText({
+    model: xai('grok-4-latest'),
+    prompt,
     tools: {
       searchTwitter: tool({
         description: 'Search for tweets and Twitter/X content based on a query. Use this when users ask to find, search, or look up tweets or X posts.',
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe('The search query for finding tweets'),
           maxResults: z.number().optional().describe('Maximum number of results to return (default: 10)'),
         }),
@@ -62,7 +59,7 @@ export async function POST(req: Request) {
       
       analyzeTrends: tool({
         description: 'Analyze trending topics and patterns on Twitter/X',
-        parameters: z.object({
+        inputSchema: z.object({
           topic: z.string().describe('The topic to analyze for trends'),
         }),
         execute: async ({ topic }) => {
@@ -78,5 +75,5 @@ export async function POST(req: Request) {
     },
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }

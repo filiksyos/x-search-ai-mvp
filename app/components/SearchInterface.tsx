@@ -1,12 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 
 export default function SearchInterface() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
+  const [input, setInput] = useState('');
+  const { messages, sendMessage, isLoading } = useChat({
+    transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (input.trim()) {
+      sendMessage({ text: input });
+      setInput('');
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -47,24 +57,31 @@ export default function SearchInterface() {
                         {message.role === 'user' ? 'You' : 'AI Assistant'}
                       </div>
                       <div className="whitespace-pre-wrap break-words">
-                        {message.content}
+                        {message.parts?.map((part: any, index: number) => {
+                          if (part.type === 'text') {
+                            return <span key={index}>{part.text}</span>;
+                          }
+                          return null;
+                        })}
                       </div>
-                      {message.toolInvocations && message.toolInvocations.length > 0 && (
+                      {message.parts?.some((part: any) => part.type?.startsWith('tool-')) && (
                         <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                          {message.toolInvocations.map((toolInvocation: any) => (
-                            <div key={toolInvocation.toolCallId} className="text-sm">
-                              {toolInvocation.state === 'result' && (
-                                <div>
-                                  <div className="font-semibold text-blue-600 dark:text-blue-400 mb-2">
-                                    🔧 Tool: {toolInvocation.toolName}
+                          {message.parts
+                            .filter((part: any) => part.type?.startsWith('tool-'))
+                            .map((toolPart: any, index: number) => (
+                              <div key={toolPart.toolCallId || index} className="text-sm">
+                                {toolPart.state === 'output-available' && (
+                                  <div>
+                                    <div className="font-semibold text-blue-600 dark:text-blue-400 mb-2">
+                                      🔧 Tool: {toolPart.toolName || toolPart.type.replace('tool-', '')}
+                                    </div>
+                                    <pre className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg overflow-x-auto text-xs">
+                                      {JSON.stringify(toolPart.output, null, 2)}
+                                    </pre>
                                   </div>
-                                  <pre className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg overflow-x-auto text-xs">
-                                    {JSON.stringify(toolInvocation.result, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                                )}
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
@@ -90,7 +107,7 @@ export default function SearchInterface() {
           <input
             type="text"
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Search for tweets..."
             className="flex-1 px-6 py-4 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 transition-colors"
             disabled={isLoading}
